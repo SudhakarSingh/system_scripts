@@ -1,0 +1,11 @@
+#!/bin/bash
+
+declare -a servers=( '10.238.26.117' )
+JOB_NAME=$1
+doc_root=/var/www/html/
+	
+for server in servers
+do
+	rsync -avzh /var/lib/jenkins/workspace/$JOB_NAME/ root@${servers[@]}:$doc_root
+	ssh root@${servers[@]} "/bin/systemctl restart apache2"
+done
