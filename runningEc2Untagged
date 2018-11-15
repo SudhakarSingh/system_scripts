@@ -61,7 +61,7 @@ def generateFileOfUntaggedEC2():
                 print("Tags does not exist")            
             if untagged:
                 print(instance)
-                untagged_dict.update({instanceName:instance['PrivateIpAddress']})
+                untagged_dict.update({"{}-{}".format(instanceName,instance['InstanceId']):instance['PrivateIpAddress']})
                 
     print(untagged_dict)
 
