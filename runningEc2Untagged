@@ -1,0 +1,98 @@
+import json
+import boto3
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from email.mime.multipart import MIMEMultipart
+import csv
+
+filename='untaggedEC2.csv'
+
+ec2=boto3.client('ec2')
+file_path = "/tmp/"+filename
+
+client = boto3.client('ses',region_name='us-east-1')
+
+def lambda_handler(event, context):
+    
+    generateFileOfUntaggedEC2()
+    sendMail()
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+
+def checkTags(tags, key):
+    try:
+        for tag in tags:
+            if tag['Key'] == key:
+                return False
+    except KeyError:
+        print("Tags Does not Exist")           
+    return True
+
+def generateFileOfUntaggedEC2():
+    untagged_dict={}
+    reservations = ec2.describe_instances(
+        Filters=[
+            {
+                'Name': 'vpc-id', 
+                'Values' :['vpc-xxxxxxx']
+            },
+            
+            {
+                'Name': 'instance-state-name',
+                'Values' :['running']
+            }
+        
+            ]
+            )['Reservations']
+    for instances in reservations:
+        #print(instances)
+        for instance in instances['Instances']:
+            instanceName = "None"
+            untagged = True
+            #print(instance)
+            try:
+                untagged = checkTags(instance['Tags'], 'Env')
+                for tag in instance['Tags']:
+                    if tag['Key'] == 'Name':
+                        instanceName = tag['Value']    
+            except KeyError:
+                print("Tags does not exist")            
+            if untagged:
+                print(instance)
+                untagged_dict.update({instanceName:instance['PrivateIpAddress']})
+                
+    print(untagged_dict)
+
+    with open(file_path, 'w') as csv_file:
+        writer = csv.writer(csv_file)
+        for key, value in untagged_dict.items():
+           writer.writerow([key, value])
+    csv_file.close()
+    
+
+def sendMail():
+    message = MIMEMultipart()
+    message['Subject'] = 'Untagged.csv file attached'
+    message['From'] = 'sudhakar.singh@gmail.com'
+    message['To'] = ', '.join(['sudhakar.singh@gmail.com'])
+
+    #message body
+
+    part = MIMEText('This mail contains Attachment describing the instances which do not have a particular tag', 'html')
+    message.attach(part)
+
+    if False:
+            print("hello")
+    else:
+            part = MIMEApplication(open(file_path, 'r').read())
+            part.add_header('Content-Disposition', 'attachment', filename=filename)
+            message.attach(part)
+    response = client.send_raw_email(
+    Source=message['From'],
+    Destinations=['sudhakar.singh@gmail.com'],
+    RawMessage={
+            'Data': message.as_string()
+        }
+    )    
