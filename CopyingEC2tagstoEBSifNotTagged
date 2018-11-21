@@ -1,0 +1,91 @@
+import boto3
+import json
+
+ec2=boto3.client('ec2')
+
+def lambda_handler(event, context):
+    # TODO implement
+    
+    checkAndCreateTagsOnVolumes()
+    return {
+        
+        
+        'statusCode': 200,
+        'body': json.dumps('The Lambda run successfully!')
+    }
+
+
+def checkAndCreateTagsOnVolumes():
+    try:
+        reservations = ec2.describe_instances(
+        Filters=[
+                {
+                'Name': 'vpc-id', 
+                'Values' :['vpc-3c580154']
+                },
+                {
+                'Name': 'tag-key', 
+                'Values' :['Env']
+                }
+                ]
+            ) 
+    
+    for instances in reservations['Reservations']:
+        for instance in instances['Instances']:
+         ebs=instance['BlockDeviceMappings']
+         for volume in ebs:
+             vol_id = volume['Ebs']['VolumeId']
+             volume = ec2.describe_volumes(
+                 VolumeIds=[
+                     vol_id
+             ]
+             )['Volumes']
+
+             volume_tags = ec2.describe_tags(
+                Filters=[
+                    {
+                        'Name': 'resource-id', 
+                        'Values' :[vol_id]
+                    }
+                ]
+            )
+             print(vol_id)
+             try:
+                 instance_tags = instance['Tags']
+             except Exception, e:
+                 print "Tags does not exist"
+                 break
+             
+             writableTags = []
+
+             for tag in instance_tags:
+                if tag['Key'] == 'Name' or 'aws:' in tag['Key']:
+                    continue
+                writableTags.append(tag)
+             
+             
+             
+             #writableTags=[ i for i in instance_tags if i["Key"] != "Name" or "aws:" not in i["Key"]]
+             #print(writableTags)
+             instance_tags=[ i for i in instance_tags if "aws:" not in i["Key"]]
+
+             for tag in volume_tags['Tags']:
+                    if tag["Key"] is "Name":
+                        print("skipping")
+                        ec2.create_tags(Resources=[vol_id], Tags=writableTags)
+                    elif not writableTags:
+                        print("No tags to write")
+                    else:
+                        print("From second else")
+                        ec2.create_tags(Resources=[vol_id], Tags=writableTags)
+
+
+             if not volume_tags['Tags']:
+                 print(vol_id)
+                 if not instance_tags:
+                     print("no tags to copy!")
+                 else:
+                     ec2.create_tags(Resources=[vol_id], Tags=instance_tags)
+                     print("from last else")
+    except Exception, e:
+        print("Execption caught"+e)
