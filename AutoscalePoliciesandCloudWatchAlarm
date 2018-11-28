@@ -1,0 +1,74 @@
+import json
+import csv
+import boto3
+
+
+filepath= '/tmp/report.csv'
+autoscaleclient = boto3.client('autoscaling')
+cwclient= boto3.client('cloudwatch')
+
+
+def lambda_handler(event, context):
+    # TODO implement
+    csvheader=[['Auto Scaling Group','Alarm Name','Metric Name','State Value','Threshold','Period','Evaluation Period','State Reason']]
+    with open(filepath,'a') as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerows(csvheader)
+    csvFile.close()
+    getpolicies()
+    
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps('The lambda function run correctly!')
+    }
+
+def getpolicies():
+    
+    response = autoscaleclient.describe_auto_scaling_groups(
+        )
+    
+    for alarm in response['AutoScalingGroups']:
+        ASGName= alarm['AutoScalingGroupName']
+        
+        AlarmList=[]
+        Alarm1=ASGName.replace('asg','up_scaling')
+        AlarmList.append(Alarm1)
+        Alarm2=ASGName.replace('asg','down_scaling')
+        AlarmList.append(Alarm2)
+        Alarm3=ASGName.replace('asg','response_time_up')
+        AlarmList.append(Alarm3)
+        Alarm4=ASGName.replace('asg','response_time_down')
+        AlarmList.append(Alarm4)
+        Alarm5=ASGName.replace('asg','low_cpu_alarm')
+        AlarmList.append(Alarm5)
+        Alarm6=ASGName.replace('asg','high_cpu_alarm')
+        AlarmList.append(Alarm6)
+        Alarm7=ASGName.replace('asg','cpu_low')
+        AlarmList.append(Alarm7)
+        Alarm8=ASGName.replace('asg','cpu_high')
+        AlarmList.append(Alarm8)
+        
+        for element in AlarmList:
+            print(element)
+            response2=cwclient.describe_alarms(
+                AlarmNames=[element]
+                )
+            print(response2)
+            for iteration in response2['MetricAlarms']:
+                evalualtion_period= iteration['EvaluationPeriods']
+                period = iteration['Period']
+                threshold = iteration['Threshold']
+                alarm_name= iteration['AlarmName']
+                state_value= iteration['StateValue']
+                state_reason= iteration['StateReason']
+                metric_name= iteration['MetricName']
+                
+                csvdata=[[ASGName,alarm_name,metric_name,state_value,threshold,period,evalualtion_period,state_reason]]
+                print(csvdata)
+                with open(filepath,'a') as csvFile:
+                    writer = csv.writer(csvFile)
+                    writer.writerows(csvdata)
+                csvFile.close()
+    s3 = boto3.resource('s3')
+    s3.meta.client.upload_file('/tmp/report.csv', 'S3BucketPath', 'report.csv')
