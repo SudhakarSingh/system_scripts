@@ -1,0 +1,67 @@
+import boto3
+import json
+import csv
+
+
+ec2 = boto3.client('ec2')
+filepath = "/tmp/OrphanedSnapshotReport.csv"
+
+def lambda_handler(event, context):
+    
+    
+    csvheader=[['Snapshot ID','Volume ID','Owner Name','Creation Date']]
+    with open(filepath,'a') as csvFile:
+        writer = csv.writer(csvFile)
+        writer.writerows(csvheader)
+    csvFile.close()
+    
+    OrphanSnapshotInfo()
+    
+    return {
+        'statusCode': 200,
+        'body': json.dumps('The lambda function run correctly!')
+    }
+
+def OrphanSnapshotInfo():
+    
+    snapshot= ec2.describe_snapshots(OwnerIds=['self'])['Snapshots']
+
+    for element in snapshot:
+        volume_id= element['VolumeId']
+        snapshot_id=element['SnapshotId']
+        owner_id= element['OwnerId']
+        start_time= element['StartTime']
+        
+        # TODO: write code...
+        try:
+            # TODO: write code...
+            response1 = ec2.describe_volumes(
+            VolumeIds=[volume_id]
+            )
+        except Exception, e:
+            OrphanedSnapshotList=[]
+            OrphanedSnapshotList.append(snapshot_id)
+            OrphanedSnapshotList.append(volume_id)
+            OrphanedSnapshotList.append(owner_id)
+            OrphanedSnapshotList.append(start_time)
+            
+            
+            csvdata=[OrphanedSnapshotList]
+            print(csvdata)
+            with open(filepath,'a') as csvFile:
+                writer = csv.writer(csvFile)
+                writer.writerows(csvdata)
+            csvFile.close()
+            
+    
+    print(OrphanedSnapshotList)
+    print(len(OrphanedSnapshotList))
+    
+    s3 = boto3.resource('s3')
+    s3.meta.client.upload_file('/tmp/OrphanedSnapshotReport.csv', 'S3Bucket', 'OrphanedSnapshotReport.csv')
+    
+    
+        
+
+                
+        
